@@ -23,6 +23,7 @@
   "name":"proj",
   "resources":[
     {"id":{"name":"font_debug","path":"fonts/font_debug/font_debug.yy",},},
+    {"id":{"name":"Note1","path":"notes/Note1/Note1.yy",},},
     {"id":{"name":"obj_Butterfly","path":"objects/obj_Butterfly/obj_Butterfly.yy",},},
     {"id":{"name":"Object1_manager","path":"objects/Object1_manager/Object1_manager.yy",},},
     {"id":{"name":"main","path":"rooms/main/main.yy",},},
