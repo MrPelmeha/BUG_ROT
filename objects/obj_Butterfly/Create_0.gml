@@ -2,8 +2,6 @@
 // 1. БАЗОВЫЕ НАСТРОЙКИ
 // ============================================
 cell_size = 64;
-world_width = 256 * cell_size;   // 16384
-world_height = 256 * cell_size;  // 16384
 
 x = 0;
 y = 0;
@@ -15,9 +13,9 @@ target_y = 0;
 // ============================================
 vx = 0;
 vy = 0;
-kp = 1.8;      // было 1.5 – увеличили для более быстрой реакции
-kd = 1.5;      // оставляем без изменений (можно поэкспериментировать)
-max_speed = 400; // было 350 – теперь максимальная скорость выше
+kp = 1.5;
+kd = 1.5;
+max_speed = 350;
 
 // ============================================
 // 3. КРУЖЕНИЕ ВОКРУГ ЦЕЛИ
@@ -54,14 +52,13 @@ cam_x = 0;
 cam_y = 0;
 cam_target_x = 0;
 cam_target_y = 0;
-cam_smooth = 0.14;
+cam_smooth = 0.08;
 
 zoom = 1.0;
 min_zoom = 0.3;
 max_zoom = 3.0;
 zoom_step = 0.1;
 
-// Базовый размер камеры (размер окна)
 if (variable_global_exists("base_width") && variable_global_exists("base_height")) {
     base_cam_w = global.base_width;
     base_cam_h = global.base_height;
@@ -71,7 +68,7 @@ if (variable_global_exists("base_width") && variable_global_exists("base_height"
 }
 
 // ============================================
-// 7. ВЫРАВНИВАНИЕ ПО СЕТКЕ
+// 7. ВЫРАВНИВАНИЕ ПО СЕТКЕ (уже не нужно, но оставляем)
 // ============================================
 x = floor(x / cell_size) * cell_size + cell_size/2;
 y = floor(y / cell_size) * cell_size + cell_size/2;
@@ -95,24 +92,97 @@ view_yport[0] = 0;
 view_wport[0] = base_cam_w;
 view_hport[0] = base_cam_h;
 
-// Если камеры нет — создаём
 if (view_camera[0] == -1) {
     var _cam = camera_create_view(0, 0, base_cam_w, base_cam_h);
     view_camera[0] = _cam;
 }
 
-// Сразу применяем камеру к позиции бабочки
+// Применяем начальную позицию камеры
 var view_w = base_cam_w / zoom;
 var view_h = base_cam_h / zoom;
 camera_set_view_size(view_camera[0], view_w, view_h);
 camera_set_view_pos(view_camera[0], x - view_w/2, y - view_h/2);
 
 // ============================================
-// ОТЛАДОЧНОЕ ОКНО (HUD)
+// 9. ОТЛАДКА
 // ============================================
-debug_visible = false;   // по умолчанию скрыто
-
-// Отладка
+debug_visible = false;
 debug_timer = 0;
-show_debug_message("Мир: " + string(world_width) + "x" + string(world_height));
-show_debug_message("Камера инициализирована. base_cam_w=" + string(base_cam_w) + ", base_cam_h=" + string(base_cam_h));
+
+// ============================================
+// 10. ЗАГРУЗКА КАРТЫ ТАЙЛОВ ИЗ РЕДАКТОРА
+// ============================================
+show_debug_message("🔍 Загружаем карту тайлов из слоя 'tile_walls'...");
+
+tile_size = 64;
+wall_tile = 2;
+global.grid = -1;
+
+var _tilemap_id = layer_tilemap_get_id("tile_walls");
+
+if (_tilemap_id != -1) {
+    show_debug_message("✅ Карта тайлов найдена! ID: " + string(_tilemap_id));
+
+    var w = tilemap_get_width(_tilemap_id);
+    var h = tilemap_get_height(_tilemap_id);
+    show_debug_message("Размер карты: " + string(w) + "x" + string(h));
+
+    global.grid = ds_grid_create(w, h);
+
+    for (var _x = 0; _x < w; _x++) {
+        for (var _y = 0; _y < h; _y++) {
+            var _tile_data = tilemap_get(_tilemap_id, _x, _y);
+            var _tile_index = tile_get_index(_tile_data);
+            global.grid[# _x, _y] = _tile_index;
+        }
+    }
+
+    show_debug_message("✅ Сетка успешно загружена из карты тайлов!");
+    show_debug_message("Пример: клетка (0,0) = " + string(global.grid[# 0, 0]));
+    show_debug_message("Пример: клетка (1,1) = " + string(global.grid[# 1, 1]));
+
+    // ============================================
+    // НОВАЯ ПОЗИЦИЯ БАБОЧКИ – ВЕРХНИЙ ЛЕВЫЙ УГОЛ (клетка 1,1)
+    // ============================================
+    var start_x = 1 * tile_size + tile_size/2;   // центр клетки (1,1)
+    var start_y = 1 * tile_size + tile_size/2;
+    x = start_x;
+    y = start_y;
+    target_x = x;
+    target_y = y;
+    orbit_center_x = x;
+    orbit_center_y = y;
+    cam_x = x;
+    cam_y = y;
+    cam_target_x = x;
+    cam_target_y = y;
+
+} else {
+    show_debug_message("❌ ОШИБКА: Карта тайлов на слое 'tile_walls' не найдена!");
+    show_debug_message("   Проверь имя слоя и наличие Tilemap на нём.");
+    // Запасной вариант – тестовая сетка
+    show_debug_message("🔄 Создаём тестовую сетку 10x10 как запасной вариант...");
+    var w = 10;
+    var h = 10;
+    global.grid = ds_grid_create(w, h);
+    ds_grid_set_region(global.grid, 0, 0, w-1, h-1, 2);
+    for (var _x = 2; _x <= 7; _x++) {
+        for (var _y = 2; _y <= 7; _y++) {
+            global.grid[# _x, _y] = 1;
+        }
+    }
+    var start_x = 1 * tile_size + tile_size/2;
+    var start_y = 1 * tile_size + tile_size/2;
+    x = start_x;
+    y = start_y;
+    target_x = x;
+    target_y = y;
+    orbit_center_x = x;
+    orbit_center_y = y;
+    cam_x = x;
+    cam_y = y;
+    cam_target_x = x;
+    cam_target_y = y;
+}
+
+show_debug_message("🦋 Бабочка создана в позиции: (" + string(x) + ", " + string(y) + ")");	

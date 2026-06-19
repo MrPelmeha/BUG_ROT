@@ -11,7 +11,73 @@ if (mouse_wheel_down()) {
 }
 
 // ============================================
-// 2. ОБРАБОТКА ВВОДА С АВТОПОВТОРОМ
+// 2. ФУНКЦИЯ ПРОВЕРКИ ДВИЖЕНИЯ (стены)
+// ============================================
+function can_move_to(_px, _py) {
+    // Проверка границ комнаты
+    if (_px < 0 || _px >= room_width || _py < 0 || _py >= room_height) {
+        return false;
+    }
+
+    // Если сетка не создана – разрешаем (запасной вариант)
+    if (!variable_global_exists("grid") || global.grid == -1) {
+        return true;
+    }
+
+    var _tx = floor(_px / tile_size);
+    var _ty = floor(_py / tile_size);
+    var w = ds_grid_width(global.grid);
+    var h = ds_grid_height(global.grid);
+    if (_tx < 0 || _tx >= w || _ty < 0 || _ty >= h) {
+        return false;
+    }
+
+    var _tile = global.grid[# _tx, _ty];
+    // Отладка: можно раскомментировать, чтобы видеть в консоли
+    // show_debug_message("Попытка в клетку (" + string(_tx) + "," + string(_ty) + ") Тайл=" + string(_tile));
+
+    if (_tile == wall_tile) {
+        return false;
+    }
+    return true;
+}
+
+// ============================================
+// 3. ОБРАБОТКА КЛИКА МЫШИ (установка метки)
+// ============================================
+if (mouse_check_button_pressed(mb_left)) {
+    // Получаем координаты мыши в пикселях
+    var mx = mouse_x;
+    var my = mouse_y;
+    
+    // Проверяем, что мышь в пределах комнаты
+    if (mx >= 0 && mx < room_width && my >= 0 && my < room_height) {
+        // Вычисляем центр клетки, на которую кликнули
+        var _tx = floor(mx / tile_size);
+        var _ty = floor(my / tile_size);
+        var _px = _tx * tile_size + tile_size/2;
+        var _py = _ty * tile_size + tile_size/2;
+        
+        // Проверяем, можно ли двигаться в эту клетку
+        if (can_move_to(_px, _py)) {
+            // Устанавливаем метку в центр клетки
+            orbit_center_x = _px;
+            orbit_center_y = _py;
+            // Сбрасываем режим кружения, чтобы бабочка летела к новой цели
+            orbiting = false;
+            target_x = orbit_center_x;
+            target_y = orbit_center_y;
+            wobble_angle = 0;
+            wobble_target = 0;
+            show_debug_message("Метка установлена кликом в клетку (" + string(_tx) + "," + string(_ty) + ")");
+        } else {
+            show_debug_message("Клик на стену – метка не установлена");
+        }
+    }
+}
+
+// ============================================
+// 4. ОБРАБОТКА ВВОДА С АВТОПОВТОРОМ (WASD)
 // ============================================
 var _step = cell_size;
 var _moved = false;
@@ -39,9 +105,7 @@ for (var i = 0; i < 4; i++) {
             }
             var new_tx = orbit_center_x + dx;
             var new_ty = orbit_center_y + dy;
-            // Ограничиваем движением внутри мира (world_width/world_height)
-            if (new_tx >= cell_size/2 && new_tx < world_width - cell_size/2 &&
-                new_ty >= cell_size/2 && new_ty < world_height - cell_size/2) {
+            if (can_move_to(new_tx, new_ty)) {
                 orbit_center_x = new_tx;
                 orbit_center_y = new_ty;
                 orbiting = false;
@@ -68,8 +132,7 @@ if (!_moved) {
     if (_first_dx != 0 || _first_dy != 0) {
         var new_tx = orbit_center_x + _first_dx;
         var new_ty = orbit_center_y + _first_dy;
-        if (new_tx >= cell_size/2 && new_tx < world_width - cell_size/2 &&
-            new_ty >= cell_size/2 && new_ty < world_height - cell_size/2) {
+        if (can_move_to(new_tx, new_ty)) {
             orbit_center_x = new_tx;
             orbit_center_y = new_ty;
             orbiting = false;
@@ -83,7 +146,7 @@ if (!_moved) {
 }
 
 // ============================================
-// 3. КРУЖЕНИЕ
+// 5. КРУЖЕНИЕ
 // ============================================
 var dist_to_center = point_distance(x, y, orbit_center_x, orbit_center_y);
 var spd = sqrt(vx*vx + vy*vy);
@@ -121,7 +184,7 @@ if (orbiting) {
 }
 
 // ============================================
-// 4. PD-РЕГУЛЯТОР (скорость и позиция)
+// 6. PD-РЕГУЛЯТОР (скорость и позиция)
 // ============================================
 var dt = delta_time / 1000000;
 if (dt > 0.05) dt = 0.05;
@@ -152,10 +215,10 @@ if (dist_to_target < 0.5 && spd < 0.5) {
 }
 
 // ============================================
-// 5. ПОВОРОТ БАБОЧКИ
+// 7. ПОВОРОТ БАБОЧКИ
 // ============================================
 if (spd > 0.5) {
-    var target_angle = point_direction(0, 0, vx, vy)-90;
+    var target_angle = point_direction(0, 0, vx, vy) - 90;
     var angle_diff = angle_difference(target_angle, image_angle);
     var rot_speed = 720;
     var rot_step = rot_speed * dt;
@@ -167,7 +230,7 @@ if (spd > 0.5) {
 }
 
 // ============================================
-// 6. КАМЕРА СЛЕДИТ ЗА ТОЧКОЙ ИГРОКА (orbit_center)
+// 8. КАМЕРА СЛЕДИТ ЗА ТОЧКОЙ ИГРОКА (БЕЗ ОГРАНИЧЕНИЙ)
 // ============================================
 if (view_camera[0] == -1) {
     var _cam = camera_create_view(0, 0, base_cam_w, base_cam_h);
@@ -179,48 +242,26 @@ var view_h = base_cam_h / zoom;
 var half_w = view_w / 2;
 var half_h = view_h / 2;
 
-// Цель камеры — центр клетки, выбранной игроком
 var desired_cam_x = orbit_center_x;
 var desired_cam_y = orbit_center_y;
 
-// Плавное следование (можно сделать резким, установив cam_smooth = 1.0)
-var dt = delta_time / 1000000;
-if (dt > 0.05) dt = 0.05;
 var lerp_factor = 1 - power(1 - cam_smooth, dt * 60);
 cam_x = lerp(cam_x, desired_cam_x, lerp_factor);
 cam_y = lerp(cam_y, desired_cam_y, lerp_factor);
 
-// Ограничение границами мира
-var min_x = half_w;
-var max_x = world_width - half_w;
-var min_y = half_h;
-var max_y = world_height - half_h;
-
-if (min_x > max_x) {
-    cam_x = world_width / 2;
-} else {
-    cam_x = clamp(cam_x, min_x, max_x);
-}
-if (min_y > max_y) {
-    cam_y = world_height / 2;
-} else {
-    cam_y = clamp(cam_y, min_y, max_y);
-}
-
+// Камера не ограничена – может уходить за пределы комнаты
 camera_set_view_pos(view_camera[0], cam_x - half_w, cam_y - half_h);
 camera_set_view_size(view_camera[0], view_w, view_h);
 
 // ============================================
-// 7. ОТЛАДОЧНЫЙ ВЫВОД В КОНСОЛЬ
+// 9. ОТЛАДКА ПО КЛАВИШЕ P
 // ============================================
 if (keyboard_check_pressed(ord("P"))) {
     debug_visible = !debug_visible;
 }
 
-
 debug_timer += dt;
 if (debug_timer > 0.5) {
     debug_timer = 0;
-    show_debug_message("cam: (" + string(cam_x) + ", " + string(cam_y) + "), zoom: " + string(zoom) + 
-                       ", view_w: " + string(view_w) + ", view_h: " + string(view_h));
+    show_debug_message("cam: (" + string(cam_x) + ", " + string(cam_y) + "), zoom: " + string(zoom));
 }

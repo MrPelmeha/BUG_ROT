@@ -110,8 +110,8 @@
   "maintainGms1Font":false,
   "name":"font_debug",
   "parent":{
-    "name":"test 2",
-    "path":"test 2.yyp",
+    "name":"proj",
+    "path":"proj.yyp",
   },
   "pointRounding":0,
   "ranges":[
